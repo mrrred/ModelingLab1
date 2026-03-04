@@ -35,7 +35,7 @@ def generate_sample(lamb, n):
     return x
 
 def main():
-    print("=== Исследование датчика случайных чисел ===")
+    print(" Исследование датчика случайных чисел ")
     print("Закон распределения: f(x) = λ·(1 - λx/2) на [0, 2/λ]")
     
     try:
@@ -55,7 +55,7 @@ def main():
     
     chi2_val, p_val, crit_val, res = chi2_test(sample, lamb, bins_test)
     
-    print("\n--- Результаты для одной выборки ---")
+    print("\n Результаты для одной выборки ")
     print(f"Объём выборки n = {n_single}")
     print(f"Среднее выборочное: {mean_val:.4f} (теоретическое: {1/lamb:.4f})")
     print(f"СКО выборочное: {std_val:.4f} (теоретическое: {1/(lamb*np.sqrt(3)):.4f})")
@@ -63,11 +63,9 @@ def main():
     print(f"p-value = {p_val:.4f}")
     print(f"Гипотеза о соответствии {res}.")
     
-    # Построение гистограммы
     plt.figure(figsize=(10, 6))
     plt.hist(sample, bins=bins_hist, density=True, alpha=0.6, edgecolor='black',
              label='Экспериментальная плотность')
-    # Теоретическая кривая
     x_plot = np.linspace(0, 2/lamb, 200)
     y_plot = lamb * (1 - lamb * x_plot / 2)
     plt.plot(x_plot, y_plot, 'r-', linewidth=2, label='Теоретическая плотность')
@@ -78,7 +76,7 @@ def main():
     plt.grid(alpha=0.3)
     plt.show()
     
-    print("\n--- Исследование влияния параметров ---")
+    print("\n Исследование влияния параметров ")
     print("Для разных объёмов выборки и числа интервалов критерия:")
     n_values = [100, 1000, 10000, 100000]
     bins_values = [10, 20, 50, 100]
@@ -90,6 +88,18 @@ def main():
             samp = generate_sample(lamb, n)
             chi2v, pv, _, res_v = chi2_test(samp, lamb, b)
             print("{:10d} {:10d} {:10.2f} {:10.4f} {:>15}".format(n, b, chi2v, pv, res_v))
+            plt.figure(figsize=(10, 6))
+            plt.hist(samp, bins=bins_hist, density=True, alpha=0.6, edgecolor='black',
+                     label='Экспериментальная плотность')
+            x_plot = np.linspace(0, 2/lamb, 200)
+            y_plot = lamb * (1 - lamb * x_plot / 2)
+            plt.plot(x_plot, y_plot, 'r-', linewidth=2, label='Теоретическая плотность')
+            plt.xlabel('x')
+            plt.ylabel('Плотность')
+            plt.title(f'Распределение с λ = {lamb}, n = {n}\nχ² = {chi2v:.2f}, p = {pv:.3f}')
+            plt.legend()
+            plt.grid(alpha=0.3)
+            plt.show()
     
     print("\nВывод: с ростом объёма выборки p-value может меняться, но в среднем гипотеза не отвергается.")
     print("Число интервалов также влияет: при малом числе интервалов критерий может быть менее чувствителен.")
