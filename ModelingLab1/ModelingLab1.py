@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.stats import chi2
+from scipy.stats import chi2, kstest
 
 def chi2_test(data, lamb, bins, alpha=0.05):
     n = len(data)
@@ -17,16 +17,26 @@ def chi2_test(data, lamb, bins, alpha=0.05):
     df = len(observed) - 1
     p_value = 1 - chi2.cdf(chi2_stat, df)
     critical = chi2.ppf(1 - alpha, df)
-
-    if chi2_stat > critical:
-        result = "отвергается"
-    else:
-        result = "не отвергается"
+    result = "отвергается" if chi2_stat > critical else "не отвергается"
     return chi2_stat, p_value, critical, result
+
+def ks_test(data, lamb, alpha=0.05):
+    def cdf(x):
+        x = np.asarray(x)
+        res = np.zeros_like(x)
+        mask = (x >= 0) & (x <= 2/lamb)
+        res[mask] = lamb * x[mask] - (lamb**2 / 4) * x[mask]**2
+        res[x > 2/lamb] = 1.0
+        return res
+    D, p_value = kstest(data, cdf)
+    n = len(data)
+    critical = 1.36 / np.sqrt(n)   # приближение для α=0.05
+    result = "отвергается" if D > critical else "не отвергается"
+    return D, p_value, critical, result
 
 def calc_stats(data):
     mean = np.mean(data)
-    std = np.std(data, ddof=1) 
+    std = np.std(data, ddof=1)
     return mean, std
 
 def generate_sample(lamb, n):
@@ -53,15 +63,15 @@ def main():
     sample = generate_sample(lamb, n_single)
     mean_val, std_val = calc_stats(sample)
     
-    chi2_val, p_val, crit_val, res = chi2_test(sample, lamb, bins_test)
+    chi2_val, p_val_chi2, crit_chi2, res_chi2 = chi2_test(sample, lamb, bins_test)
+    ks_val, p_val_ks, crit_ks, res_ks = ks_test(sample, lamb)
     
     print("\n Результаты для одной выборки ")
     print(f"Объём выборки n = {n_single}")
     print(f"Среднее выборочное: {mean_val:.4f} (теоретическое: {1/lamb:.4f})")
     print(f"СКО выборочное: {std_val:.4f} (теоретическое: {1/(lamb*np.sqrt(3)):.4f})")
-    print(f"Статистика χ² = {chi2_val:.2f}, критическое значение (α=0.05, df={bins_test-1}) = {crit_val:.2f}")
-    print(f"p-value = {p_val:.4f}")
-    print(f"Гипотеза о соответствии {res}.")
+    print(f"Критерий Пирсона: χ² = {chi2_val:.2f}, критическое = {crit_chi2:.2f}, p-value = {p_val_chi2:.4f}, гипотеза {res_chi2}.")
+    print(f"Критерий Колмогорова: D = {ks_val:.4f}, критическое = {crit_ks:.4f}, p-value = {p_val_ks:.4f}, гипотеза {res_ks}.")
     
     plt.figure(figsize=(10, 6))
     plt.hist(sample, bins=bins_hist, density=True, alpha=0.6, edgecolor='black',
@@ -71,7 +81,9 @@ def main():
     plt.plot(x_plot, y_plot, 'r-', linewidth=2, label='Теоретическая плотность')
     plt.xlabel('x')
     plt.ylabel('Плотность')
-    plt.title(f'Распределение с λ = {lamb}, n = {n_single}\nχ² = {chi2_val:.2f}, p = {p_val:.3f}')
+    plt.title(f'λ = {lamb}, n = {n_single}\n'
+              f'χ² = {chi2_val:.2f} (крит. {crit_chi2:.2f}) p = {p_val_chi2:.3f} → {res_chi2}\n'
+              f'KS D = {ks_val:.4f} (крит. {crit_ks:.4f}) p = {p_val_ks:.3f} → {res_ks}')
     plt.legend()
     plt.grid(alpha=0.3)
     plt.show()
@@ -81,22 +93,28 @@ def main():
     n_values = [100, 1000, 10000, 100000]
     bins_values = [10, 20, 50, 100]
     
-    print("\n{n:>10} {bins:>10} {chi2:>10} {p:>10} {result:>15}".format(
-        n="n", bins="интервалы", chi2="χ²", p="p-value", result="решение"))
+    print("\n" + "="*100)
+    print("{:>6} {:>5} {:>8} {:>8} {:>8} {:>15} {:>8} {:>8} {:>15}".format(
+        "n", "bins", "χ²", "χ²_crit", "p_χ²", "реш_χ²", "D", "D_crit", "реш_KS"))
+    print("="*100)
+
     for n in n_values:
         for b in bins_values:
             samp = generate_sample(lamb, n)
-            chi2v, pv, _, res_v = chi2_test(samp, lamb, b)
-            print("{:10d} {:10d} {:10.2f} {:10.4f} {:>15}".format(n, b, chi2v, pv, res_v))
+            chi2v, pv_chi2, crit_chi2v, res_chi2v = chi2_test(samp, lamb, b)
+            ksv, pv_ks, crit_ksv, res_ksv = ks_test(samp, lamb)
+            print("{:6d} {:5d} {:8.2f} {:8.2f} {:8.4f} {:>15} {:8.4f} {:8.4f} {:>15}".format(
+                n, b, chi2v, crit_chi2v, pv_chi2, res_chi2v, ksv, crit_ksv, res_ksv))
+            
             plt.figure(figsize=(10, 6))
             plt.hist(samp, bins=bins_hist, density=True, alpha=0.6, edgecolor='black',
                      label='Экспериментальная плотность')
-            x_plot = np.linspace(0, 2/lamb, 200)
-            y_plot = lamb * (1 - lamb * x_plot / 2)
             plt.plot(x_plot, y_plot, 'r-', linewidth=2, label='Теоретическая плотность')
             plt.xlabel('x')
             plt.ylabel('Плотность')
-            plt.title(f'Распределение с λ = {lamb}, n = {n}\nχ² = {chi2v:.2f}, p = {pv:.3f}')
+            plt.title(f'λ = {lamb}, n = {n}, интервалов Пирсона = {b}\n'
+                      f'χ² = {chi2v:.2f} (крит. {crit_chi2v:.2f}) p = {pv_chi2:.3f} → {res_chi2v}\n'
+                      f'KS D = {ksv:.4f} (крит. {crit_ksv:.4f}) p = {pv_ks:.3f} → {res_ksv}')
             plt.legend()
             plt.grid(alpha=0.3)
             plt.show()
