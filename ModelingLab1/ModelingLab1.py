@@ -4,7 +4,7 @@ from scipy.stats import chi2
 
 def chi2_test(data, lamb, bins, alpha=0.05):
     n = len(data)
-    observed, edges = np.histogram(data, bins=bins, density=False)
+    observed, edges = np.histogram(data, bins=bins, range=(0, 2/lamb), density=False)
 
     expected_probs = []
     for i in range(len(edges) - 1):
