@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.stats import chi2, kstest
+from scipy.stats import chi2, kstest, norm
 
 def chi2_test(data, lamb, bins, alpha=0.05):
     n = len(data)
@@ -30,7 +30,7 @@ def ks_test(data, lamb, alpha=0.05):
         return res
     D, p_value = kstest(data, cdf)
     n = len(data)
-    critical = 1.36 / np.sqrt(n)   # приближение для α=0.05
+    critical = 1.36 / np.sqrt(n) 
     result = "отвергается" if D > critical else "не отвергается"
     return D, p_value, critical, result
 
@@ -44,9 +44,15 @@ def generate_sample(lamb, n):
     x = (2.0 / lamb) * (1 - np.sqrt(1 - u))
     return x
 
+def generate_sum_sample(lamb, n, m):
+    """Генерирует n сумм по m независимых величин из исходного распределения."""
+    samples = generate_sample(lamb, n * m).reshape(n, m)
+    return np.sum(samples, axis=1)
+
 def main():
     print(" Исследование датчика случайных чисел ")
     print("Закон распределения: f(x) = λ·(1 - λx/2) на [0, 2/λ]")
+    print("Теоретические моменты: E[X] = 2/(3λ), D[X] = 2/(9λ²), σ = √2/(3λ)")
     
     try:
         lamb = float(input("Введите λ (по умолчанию 5.0): ") or 5.0)
@@ -63,13 +69,17 @@ def main():
     sample = generate_sample(lamb, n_single)
     mean_val, std_val = calc_stats(sample)
     
+    # Теоретические значения
+    theor_mean = 2 / (3 * lamb)
+    theor_std = np.sqrt(2) / (3 * lamb)
+    
     chi2_val, p_val_chi2, crit_chi2, res_chi2 = chi2_test(sample, lamb, bins_test)
     ks_val, p_val_ks, crit_ks, res_ks = ks_test(sample, lamb)
     
     print("\n Результаты для одной выборки ")
     print(f"Объём выборки n = {n_single}")
-    print(f"Среднее выборочное: {mean_val:.4f} (теоретическое: {1/lamb:.4f})")
-    print(f"СКО выборочное: {std_val:.4f} (теоретическое: {1/(lamb*np.sqrt(3)):.4f})")
+    print(f"Среднее выборочное: {mean_val:.4f} (теоретическое: {theor_mean:.4f})")
+    print(f"СКО выборочное: {std_val:.4f} (теоретическое: {theor_std:.4f})")
     print(f"Критерий Пирсона: χ² = {chi2_val:.2f}, критическое = {crit_chi2:.2f}, p-value = {p_val_chi2:.4f}, гипотеза {res_chi2}.")
     print(f"Критерий Колмогорова: D = {ks_val:.4f}, критическое = {crit_ks:.4f}, p-value = {p_val_ks:.4f}, гипотеза {res_ks}.")
     
@@ -105,22 +115,46 @@ def main():
             ksv, pv_ks, crit_ksv, res_ksv = ks_test(samp, lamb)
             print("{:6d} {:5d} {:8.2f} {:8.2f} {:8.4f} {:>15} {:8.4f} {:8.4f} {:>15}".format(
                 n, b, chi2v, crit_chi2v, pv_chi2, res_chi2v, ksv, crit_ksv, res_ksv))
-            
-            plt.figure(figsize=(10, 6))
-            plt.hist(samp, bins=bins_hist, density=True, alpha=0.6, edgecolor='black',
-                     label='Экспериментальная плотность')
-            plt.plot(x_plot, y_plot, 'r-', linewidth=2, label='Теоретическая плотность')
-            plt.xlabel('x')
-            plt.ylabel('Плотность')
-            plt.title(f'λ = {lamb}, n = {n}, интервалов Пирсона = {b}\n'
-                      f'χ² = {chi2v:.2f} (крит. {crit_chi2v:.2f}) p = {pv_chi2:.3f} → {res_chi2v}\n'
-                      f'KS D = {ksv:.4f} (крит. {crit_ksv:.4f}) p = {pv_ks:.3f} → {res_ksv}')
-            plt.legend()
-            plt.grid(alpha=0.3)
-            plt.show()
     
     print("\nВывод: с ростом объёма выборки p-value может меняться, но в среднем гипотеза не отвергается.")
     print("Число интервалов также влияет: при малом числе интервалов критерий может быть менее чувствителен.")
+    
+    print("\n" + "="*60)
+    print("Исследование ЦПТ: сумма независимых величин")
+    print("="*60)
+    try:
+        m = int(input("Введите число слагаемых (по умолчанию 30): ") or 30)
+        n_cpt = int(input("Введите объём выборки сумм (по умолчанию 10000): ") or 10000)
+    except:
+        print("Ошибка ввода, будут использованы значения по умолчанию")
+        m = 30
+        n_cpt = 10000
+    
+    sums = generate_sum_sample(lamb, n_cpt, m)
+    mean_sum = np.mean(sums)
+    std_sum = np.std(sums, ddof=1)
+    
+    theor_mean_sum = m * (2 / (3 * lamb))
+    theor_var_sum = m * (2 / (9 * lamb**2))
+    theor_std_sum = np.sqrt(theor_var_sum)
+    
+    print(f"\nПараметры суммы {m} слагаемых (n = {n_cpt}):")
+    print(f"Среднее выборочное: {mean_sum:.4f} (теоретическое: {theor_mean_sum:.4f})")
+    print(f"СКО выборочное: {std_sum:.4f} (теоретическое: {theor_std_sum:.4f})")
+    
+    plt.figure(figsize=(10, 6))
+    plt.hist(sums, bins=bins_hist, density=True, alpha=0.6, edgecolor='black',
+             label='Гистограмма сумм')
+    x_norm = np.linspace(theor_mean_sum - 4*theor_std_sum, theor_mean_sum + 4*theor_std_sum, 200)
+    y_norm = norm.pdf(x_norm, theor_mean_sum, theor_std_sum)
+    plt.plot(x_norm, y_norm, 'r-', linewidth=2, label='Нормальная аппроксимация (ЦПТ)')
+    plt.xlabel('Сумма')
+    plt.ylabel('Плотность')
+    plt.title(f'ЦПТ: сумма {m} слагаемых, λ = {lamb}\n'
+              f'Среднее = {mean_sum:.3f} (теор. {theor_mean_sum:.3f}), σ = {std_sum:.3f} (теор. {theor_std_sum:.3f})')
+    plt.legend()
+    plt.grid(alpha=0.3)
+    plt.show()
 
 if __name__ == "__main__":
     main()
