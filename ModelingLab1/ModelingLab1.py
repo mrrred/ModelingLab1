@@ -2,10 +2,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import chi2, kstest, norm
 
-def chi2_test(data, lamb, bins, alpha=0.05):
+def chi2_test(data, lamb, bins, alpha=0.05, min_expected=5):
+    """
+    Критерий согласия Пирсона с автоматическим объединением интервалов,
+    в которых ожидаемая частота меньше min_expected.
+    """
     n = len(data)
     observed, edges = np.histogram(data, bins=bins, range=(0, 2/lamb), density=False)
 
+    # Ожидаемые вероятности для каждого исходного интервала
     expected_probs = []
     for i in range(len(edges) - 1):
         a, b = edges[i], edges[i + 1]
@@ -13,8 +18,35 @@ def chi2_test(data, lamb, bins, alpha=0.05):
         expected_probs.append(prob)
     expected = n * np.array(expected_probs)
 
-    chi2_stat = np.sum((observed - expected) ** 2 / expected)
-    df = len(observed) - 1
+    # Объединение интервалов
+    obs_merged = []
+    exp_merged = []
+    current_obs = 0
+    current_exp = 0
+    for o, e in zip(observed, expected):
+        current_obs += o
+        current_exp += e
+        if current_exp >= min_expected:
+            obs_merged.append(current_obs)
+            exp_merged.append(current_exp)
+            current_obs = 0
+            current_exp = 0
+    # Остаток (если есть) присоединяем к последнему интервалу
+    if current_exp > 0:
+        if obs_merged:
+            obs_merged[-1] += current_obs
+            exp_merged[-1] += current_exp
+        else:
+            # Все интервалы были мелкими – объединяем в один
+            obs_merged = [current_obs]
+            exp_merged = [current_exp]
+
+    # Расчёт статистики и степеней свободы
+    chi2_stat = np.sum((np.array(obs_merged) - np.array(exp_merged)) ** 2 / np.array(exp_merged))
+    df = len(obs_merged) - 1
+    if df <= 0:
+        # Слишком мало интервалов после объединения – критерий неприменим
+        return chi2_stat, np.nan, np.nan, "неприменим"
     p_value = 1 - chi2.cdf(chi2_stat, df)
     critical = chi2.ppf(1 - alpha, df)
     result = "отвергается" if chi2_stat > critical else "не отвергается"
